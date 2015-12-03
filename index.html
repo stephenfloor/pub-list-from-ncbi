@@ -1,0 +1,97 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+
+	<script src="js/jquery-1.8.0.min.js"></script>
+
+	$.ajax({
+		async: true, 
+		type: 'GET', 
+		url: "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&query_key=1&WebEnv=NCID_1_402133617_130.14.18.34_9001_1449164560_72275993_0MetA0_S_MegaStore_F_1", 
+		success: function(data) {
+			var jData = $(data);
+			var error = jData.find("ERROR");
+			var pmid = jData.find("Id"); // 26630598
+			var items = jData.find("Item"); // all items; currently not used
+			var journal = jData.find("Item[Name=Source]"); // Nature
+			var pubdate = jData.find("Item[Name=PubDate]"); // 2015 Dec 2
+			var so = jData.find("Item[Name=SO]"); // 2015 Dec 2;528(7580):S6   # note that SO is populated even for papers in press whereas volume, etc are not. 
+			var title = jData.find("Item[Name=Title]");
+			//var pmid = jData.find("Item[Name=pubmed][Type=String]"); // 26545076 # note that pmid is the previousElementSibling of the pmcid; used later to map pmcid onto the current entry 
+			var pmcid = jData.find("Item[Name=pmc]"); // PMC4636735 
+			var authorlists = jData.find("Item[Name=AuthorList]"); // <Item Name="AuthorList" Type="List"><Item Name="Author" Type="String">Floor SN</Item><Item Name="Author" Type="String">Condon KJ</Item><Item Name="Author" Type="String">Sharma D</Item><Item Name="Author" Type="String">Jankowsky E</Item><Item Name="Author" Type="String">Doudna JA</Item></Item>
+			
+		
+			// build a mapping between pmid and pmcid to correct for the fact that not all entries have a pmcid - key is pmid and value is pmcid 
+			var pmid_to_pmcid = {}; 
+			for (i = 0; i < pmcid.length; i++) { 
+				parent_pmid = $(pmcid[i].parentNode).find("Item[Name=pubmed]")[0].innerHTML;
+				pmid_to_pmcid[parent_pmid] = pmcid[i].innerHTML;
+			}
+		
+			//reconstruct author list strings from the XML - key is pmid and value is authors 
+			var authors = {};
+			for  (i = 0; i < authorlists.length; i++) { 
+				authors[pmid[i].innerHTML] = $(authorlists[i])[0].textContent.trim().replace(/\n\t+/g, ', ');
+			}
+			
+	
+			// get the pubGadget container to put the publications into 
+			var container = document.getElementById("pubGadget");
+			
+			if (error.length > 0) { 
+				container.innerHTML = 'Error loading publications! Please see <a href="http://www.ncbi.nlm.nih.gov/pubmed/?term=doudna+j[Author]+AND+%28berkeley[affil]+OR+yale[affil]+OR+harvard[affil]+OR+colorado[affil]%29+AND+2012[PDAT]+%3A+2050[PDAT]">pubmed</a>.';
+			}
+			else { 
+				container.innerHTML = '';
+				
+				// populate the container 
+				for (i = 0; i < pmid.length; i++) { 
+					//create the anchor object		 			
+					var pubmedLink = document.createElement('a');
+		
+					// link should look like this: http://www.ncbi.nlm.nih.gov/pubmed/26627310
+					linkBase = "http://www.ncbi.nlm.nih.gov/pubmed/"
+		
+					pubmedLink.setAttribute('href', linkBase + pmid[i].innerHTML);
+					pubmedLink.setAttribute('class', "publink");
+					pubmedLink.innerHTML = title[i].innerHTML;
+		
+					container.appendChild(pubmedLink);
+		
+					var journalSpan = document.createElement('span');
+					journalSpan.setAttribute('class', 'pubjournal');
+					journalSpan.innerHTML = journal[i].innerHTML;
+					
+					var authorSpan = document.createElement('span');
+					authorSpan.innerHTML = authors[pmid[i].innerHTML];
+		
+					var div = document.createElement("p");
+					div.setAttribute('class', 'feedtext');
+					div.appendChild(authorSpan);
+					div.appendChild(document.createElement("br"));
+					div.appendChild(journalSpan);
+					cur_pmcid = pmid_to_pmcid[pmid[i].innerHTML];
+					if (cur_pmcid) { 
+						div.appendChild(document.createTextNode(" " + so[i].innerHTML + " PMCID: " + cur_pmcid));
+					} else { 
+						div.appendChild(document.createTextNode(" " + so[i].innerHTML));
+					}
+					
+					div.appendChild(document.createElement("br"));
+					container.appendChild(div);
+				} // loop across all publications from NCBI API 
+			} // else error 
+		}});	// close get from NCBI 
+
+	</script>
+
+</head>
+
+<body>
+<div class="container">
+
+<div id="pubGadget">Loading...</div>
+</div>
+</body>
+</html>
+
